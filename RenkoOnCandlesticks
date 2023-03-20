@@ -1,0 +1,89 @@
+//@version=4
+study(title="Renko on Candlesticks", shorttitle="Renko on Candlesticks", overlay=true)
+
+src = input(title="Source", type=input.source, defval=close)
+sizingMethodInput = input(title='Brick Sizing Method', defval='% of ATR', options=['% of Price', 'Fixed Price Amount', '% of ATR'])
+sizingAmount = input(title='% of Price / Fixed Price Amount / % of ATR', type=input.float, defval=100)
+atrLength = input(title="ATR Length  (if Brick Sizing Method is % of ATR)", type=input.integer, defval=14, minval=1, maxval=300)
+displayBounds = input(title="Display Bounds?", type=input.bool, defval=true)
+renkoMaLength = input(title="Renko MA length ('0' to hide MA)", type=input.integer, defval=10)
+
+sizingMethod = iff(sizingMethodInput == 'Fixed Price Amount', 'fixed', iff(sizingMethodInput == '% of Price', '%price', '%ATR'))
+atrExpr = atr(atrLength)
+atrSeries = security(syminfo.tickerid, timeframe.period, atrExpr, barmerge.lookahead_off)
+
+brickSource = 0.0
+brickSize = 0.0
+brickUp = 0.0
+float brickLowerSeries = src
+float brickUpperSeries = src
+if(brickSource[1] != 0)
+    brickSource := brickSource[1]
+    brickSize := brickSize[1]
+    brickUp := brickUp[1]
+    brickLowerSeries := brickLowerSeries[1]
+    brickUpperSeries := brickUpperSeries[1]
+int multiplier = na
+if(sizingMethod != '%ATR' or atrSeries)  // for % of ATR, wait for atrSeries length before starting
+    if(sizingMethod == 'fixed')
+        brickSize:= sizingAmount
+    else
+        brickSize:= (sizingMethod == '%ATR'? atrSeries : brickSource) * (sizingAmount/100)
+        
+    up = src > brickUpperSeries + brickSize
+    down = src < brickLowerSeries - brickSize
+    isNewBrick = brickSource == 0 or up or down
+    if(isNewBrick)
+        brickSource := src
+        if brickUpperSeries == 0
+            brickUpperSeries := brickSource
+        if brickLowerSeries == 0
+            brickLowerSeries := brickSource
+        
+        multiplier := 1
+        if src > brickUpperSeries + 2*brickSize
+            multiplier := ceil((src - brickUpperSeries)/brickSize)
+        if src < brickLowerSeries - 2*brickSize
+            multiplier := ceil((brickLowerSeries - src)/brickSize)
+        brickUp := up ? 1 : -1
+        if(brickUp == 1) 
+            brickUpperSeries := brickUpperSeries + multiplier*brickSize
+            brickLowerSeries := brickUpperSeries[1] + (multiplier-1)*brickSize
+        if(brickUp == -1)
+            brickLowerSeries := brickLowerSeries - multiplier*brickSize
+            brickUpperSeries := brickLowerSeries[1] - (multiplier-1)*brickSize
+
+marrow = src > brickUpperSeries[1] ? multiplier : -1*multiplier 
+plotarrow(marrow)
+//plotchar(multiplier != 1,location=location.abovebar, text=multiplier)
+
+fillColor = brickUp == 1 ? color.green : color.red
+
+p1 = plot(brickLowerSeries, title="Lower line", color=fillColor, linewidth=2, style=plot.style_stepline, trackprice=false)
+p2 = plot(brickUpperSeries, title="Upper line", color=fillColor, linewidth=2, style=plot.style_stepline, trackprice=false)
+fill(p1, p2, title="Inner background", color=fillColor, transp=75)
+
+float lowerBoundSeries = na
+float upperBoundSeries = na
+
+if displayBounds == true
+    lowerBoundSeries := brickLowerSeries - brickSize
+    upperBoundSeries := brickUpperSeries + brickSize
+
+plot(lowerBoundSeries, title="Lower bound", color=color.blue, linewidth=1, style=plot.style_stepline)
+plot(upperBoundSeries, title="Upper bound", color=color.blue, linewidth=1, style=plot.style_stepline)
+
+int numFound = 0
+float midline = 0.0
+if renkoMaLength != 0
+    for i = 0 to 1660
+        if numFound == renkoMaLength
+            break
+        if brickLowerSeries[i] != brickLowerSeries[i+1]
+            numFound := numFound + 1
+            midline := (midline * (numFound - 1) + brickLowerSeries[i] + (brickUpperSeries[i] - brickLowerSeries[i])/2)/numFound
+else
+    midline := na
+
+plot(midline, style = plot.style_linebr, color=color.yellow, linewidth=2)
+//plot(brickLowerSeries + (brickUpperSeries - brickLowerSeries)/2, style = plot.style_linebr)
