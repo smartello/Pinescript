@@ -1,6 +1,9 @@
 //@version=4
 study(title="Renko on Candlesticks", shorttitle="Renko on Candlesticks", overlay=true)
 
+// If you like this script, it makes you money and you want to donate to the author,
+// there's a link for that: https://buy.stripe.com/28o28S6OC2eybnidQQ
+
 src = input(title="Source", type=input.source, defval=close)
 sizingMethodInput = input(title='Brick Sizing Method', defval='% of ATR', options=['% of Price', 'Fixed Price Amount', '% of ATR'])
 sizingAmount = input(title='% of Price / Fixed Price Amount / % of ATR', type=input.float, defval=100)
